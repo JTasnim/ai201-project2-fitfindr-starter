@@ -136,41 +136,51 @@ session = {
 
 ## AI Tool Plan
 
-<!-- For each part of the implementation below, describe:
-     - Which AI tool you plan to use (Claude, Copilot, ChatGPT, etc.)
-     - What you'll give it as input (which sections of this planning.md, your agent diagram)
-     - What you expect it to produce
-     - How you'll verify the output matches your spec before moving on
+### Milestone 3 — Building each tool
 
-     "I'll use AI to help me code" is not a plan.
-     "I'll give Claude my Tool 1 spec (inputs, return value, failure mode) and ask it to implement
-     search_listings() using load_listings() from the data loader — then test it against 3 queries
-     before trusting it" is a plan. -->
+**For `search_listings`:**
+I'll give Claude the Tool 1 block above (inputs, return value, failure mode) and ask it to implement the function using `load_listings()` from `utils/data_loader.py`. Before running it, I'll verify the generated code filters by all three parameters and returns `[]` rather than raising on no results. I'll test with 3 queries: one that returns results, one designed to return empty, and one that checks the price ceiling is respected.
 
-**Milestone 3 — Individual tool implementations:**
+**For `suggest_outfit`:**
+I'll give Claude the Tool 2 block and the wardrobe schema from `data/wardrobe_schema.json` and ask it to implement the LLM call using Groq `llama-3.3-70b-versatile`. Before running, I'll check it handles `wardrobe["items"] == []` explicitly. I'll test once with an example wardrobe and once with an empty wardrobe.
 
-**Milestone 4 — Planning loop and state management:**
+**For `create_fit_card`:**
+I'll give Claude the Tool 3 block and ask it to implement the LLM call with temperature > 0. I'll verify the empty `outfit` guard is in place before running. I'll run it 3 times on the same input and confirm outputs differ each time.
+
+### Milestone 4 — Planning loop
+
+I'll give Claude the full Architecture diagram and the Planning Loop + State Management sections from this file and ask it to implement `run_agent()` in `agent.py`. I'll review that the generated code branches on the `search_listings` result before running it. I'll check that it stores values in the session dict and does not call all three tools unconditionally.
 
 ---
 
-## A Complete Interaction (Step by Step)
+## A Complete Interaction
 
-Write out what a full user interaction looks like from start to finish — tool call by tool call. Use a specific example query.
+**User query:** "I'm looking for a vintage graphic tee under $30, size M. I mostly wear baggy jeans and chunky sneakers."
 
-**Example user query:** "I'm looking for a vintage graphic tee under $30. I mostly wear baggy jeans and chunky sneakers. What's out there and how would I style it?"
+**Step 1:** `search_listings("vintage graphic tee", size="M", max_price=30.0)`
+→ Returns 3 results. Agent sets `session["selected_item"] = results[0]`: _"Faded Band Tee — $22, Depop, Good condition"_
 
-**Step 1:**
+**Step 2:** `suggest_outfit(new_item=<band tee>, wardrobe=<user's wardrobe>)`
+→ Returns: _"Pair this with your wide-leg jeans and chunky sneakers for a 90s grunge look. Tuck the front corner slightly for shape."_
+Agent sets `session["outfit_suggestion"]` to this string.
 
-<!-- What does the agent do first? Which tool is called? With what input? -->
+**Step 3:** `create_fit_card(outfit=<suggestion>, new_item=<band tee>)`
+→ Returns: _"thrifted this faded band tee off depop for $22 and honestly it was made for my wide-legs 🖤 full look in my stories"_
+Agent sets `session["fit_card"]` to this string.
 
-**Step 2:**
+**User sees:** Selected item panel, outfit suggestion panel, and fit card panel — all three populated.
 
-<!-- What happens next? What was returned from step 1? What tool is called now? -->
+---
 
-**Step 3:**
+**Error path:** Same query but `size="XXS"` and `max_price=5.0`
 
-<!-- Continue until the full interaction is complete -->
+**Step 1:** `search_listings("vintage graphic tee", size="XXS", max_price=5.0)`
+→ Returns `[]`
 
-**Final output to user:**
+Agent sets:
 
-<!-- What does the user actually see at the end? -->
+```
+session["error"] = "No listings found for a vintage graphic tee in size XXS under $5. Try raising your budget or searching size XS."
+```
+
+Returns session immediately. `suggest_outfit` is never called. `session["fit_card"]` remains `None`.
